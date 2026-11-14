@@ -350,7 +350,7 @@ var CFG={
 
   var form=$("blessingForm"), status=$("blessingStatus"), list=$("blessings");
   var song=$("danceSong"), songs=$("songResults"), songStatus=$("songStatus"), songTimer, songVersion=0;
-  var dancePicks=["Kala Chashma","London Thumakda","Gallan Goodiyaan","Nachde Ne Saare","Badtameez Dil","Morni Banke","Aankh Marey","Kar Gayi Chull","Sauda Khara Khara","Tareefan","The Punjaabban Song","What Jhumka?","Desi Girl","Jhoome Jo Pathaan","Chaleya","Aaj Ki Raat","Tauba Tauba","Bijlee Bijlee","Lehanga","Lamberghini","Mundian To Bach Ke","Naach Meri Rani","Dil Chori","Sweety Tera Drama"];
+  var dancePicks=["Kala Chashma","London Thumakda","Gallan Goodiyaan","Nachde Ne Saare","Badtameez Dil","Morni Banke","Aankh Marey","Kar Gayi Chull","Sauda Khara Khara","Tareefan","The Punjaabban Song","What Jhumka?","Desi Girl","Jhoome Jo Pathaan","Chaleya","Aaj Ki Raat","Tauba Tauba","Bijlee Bijlee","Lehanga","Lamberghini","Mundian To Bach Ke","Naach Meri Rani","Dil Chori","Sweety Tera Drama","Chammak Challo","Chikni Chameli","Sheila Ki Jawani","Munni Badnaam Hui","Kajra Re","Dilliwali Girlfriend","Ghagra","Bole Chudiyan","Maahi Ve","Say Shava Shava","It's the Time to Disco","You Are My Soniya","Ainvayi Ainvayi","Cutiepie","Gal Mitthi Mitthi","Sadi Gali","Laung Da Lashkara","Ambarsariya","High Rated Gabru","Suit Suit","Patiala Peg","5 Taara","G.O.A.T.","Born to Shine","Lover","Proper Patola","Brown Munde","Excuses","With You","Softly","Winning Speech","Players","Obsessed","Naah","Kya Baat Ay","Backbone","Nikle Currant","Lahore","Ishare Tere","Ban Ja Rani","Tunak Tunak Tun","Ho Jayegi Balle Balle","Dhol Jageero Da","Gur Nalon Ishq Mitha","Mera Laung Gawacha","Morni","Lat Lag Gayee","Saturday Saturday","Abhi Toh Party Shuru Hui Hai","Baby Doll","Kamariya","Param Sundari","Besharam Rang","Ghungroo","Jai Jai Shivshankar","Sher Khul Gaye","Show Me The Thumka","Jamal Kudu","Naatu Naatu","Oo Antava","Srivalli"];
   song.addEventListener("focus",function(){if(!song.value.trim())showSongResults(dancePicks.slice(0,6))});
   song.addEventListener("input",updateSongSuggestions);
   song.addEventListener("compositionend",updateSongSuggestions);
@@ -377,12 +377,7 @@ var CFG={
     songStatus.textContent="Searching songs…";
     songTimer=setTimeout(async function(){
       try{
-        var results;
-        try{results=await searchMusic(query,version)}
-        catch(error){
-          if(version!==songVersion)return;
-          results=await searchRecordings(query);
-        }
+        var results=await searchMusic(query,version);
         if(version!==songVersion)return;
         showSongResults([...new Set(matches.concat(results))]);
         songStatus.textContent=matches.length||results.length?"":"No matches. You can keep your typed song.";
@@ -390,21 +385,6 @@ var CFG={
         if(version===songVersion)songStatus.textContent="Could not load songs. Tap Search songs to retry.";
       }
     },immediate===true?0:550);
-  }
-  async function searchRecordings(query){
-    var url=new URL("https://musicbrainz.org/ws/2/recording/");
-    url.search=new URLSearchParams({query:query,fmt:"json",limit:"25"});
-    var controller=new AbortController();
-    var timer=setTimeout(function(){controller.abort()},6000);
-    try{
-      var response=await fetch(url,{signal:controller.signal,credentials:"omit"});
-      if(!response.ok)throw Error("Search unavailable");
-      var data=await response.json();
-      return (data.recordings||[]).filter(function(track){return track.title}).map(function(track){
-        var artist=(track["artist-credit"]||[]).map(function(credit){return credit.name+(credit.joinphrase||"")}).join("");
-        return (track.title+(artist?" · "+artist:"")).slice(0,180);
-      });
-    }finally{clearTimeout(timer)}
   }
   function searchMusic(query,version){
     return new Promise(function(resolve,reject){
@@ -417,12 +397,12 @@ var CFG={
         if(results)resolve(results);else reject(Error("Search unavailable"));
       }
       window[callback]=function(data){
-        finish((data.results||[]).filter(function(track){return track.trackName&&track.artistName})
+        finish((data.results||[]).filter(function(track){return track.trackName&&track.artistName&&track.trackName.toLowerCase().includes(query.toLowerCase())})
           .map(function(track){return (track.trackName+" · "+track.artistName).slice(0,180)}));
       };
       script.onerror=function(){finish(null)};
       script.src="https://itunes.apple.com/search?"+new URLSearchParams({
-        term:query,country:"IN",media:"music",entity:"song",limit:"25",callback:callback
+        term:query,country:"IN",media:"music",entity:"song",attribute:"songTerm",limit:"25",callback:callback
       });
       document.head.append(script);
     });
@@ -484,10 +464,29 @@ var CFG={
       list.append(item);
     });
   }
-  function localBlessings(){return JSON.parse(localStorage.getItem("rokaBlessings")||"[]")}
+  var blessingsKey = "sb_publishable_THpEq0aCPoyLwhWnQhYrwg_4sdX7ojI";
+  var blessingsEndpoint = "https://pqblwqgcbuepdiugqzri.supabase.co/rest/v1/roka_blessings";
+  async function requestBlessings(entry){
+    var headers={apikey:blessingsKey};
+    if(entry){
+      headers["Content-Type"]="application/json";
+      headers.Prefer="return=minimal";
+      var posted=await fetch(blessingsEndpoint,{method:"POST",headers:headers,body:JSON.stringify(entry)});
+      if(!posted.ok)throw Error("Could not post blessing");
+      return;
+    }
+    var response=await fetch(blessingsEndpoint+"?select=name,message,song&order=created_at.desc,id.desc",{headers:headers,cache:"no-store"});
+    if(!response.ok)throw Error("Could not load blessings");
+    return response.json();
+  }
   async function loadBlessings(){
-    status.textContent="Blessings on this version are saved on this browser.";
-    try{renderBlessings(localBlessings())}catch(error){renderBlessings([])}
+    if(!blessingsKey){
+      status.textContent="Shared blessings will open once the guestbook is connected.";
+      form.querySelector('[type="submit"]').disabled=true;
+      return;
+    }
+    try{renderBlessings(await requestBlessings())}
+    catch(error){status.textContent="Could not load guest blessings. Refresh to try again."}
   }
   form.addEventListener("submit",async function(event){
     event.preventDefault();
@@ -498,14 +497,14 @@ var CFG={
       entry.name=entry.name.trim();
       entry.message=entry.message.trim();
       if(!entry.name||!entry.message)throw Error("Empty blessing");
-      var entries=[entry,...localBlessings()];
-      localStorage.setItem("rokaBlessings",JSON.stringify(entries));
-      renderBlessings(entries);
+      await requestBlessings(entry);
       form.reset();
       ++songVersion;
       songs.replaceChildren();
       songStatus.textContent="";
-      status.textContent="Your blessing was saved on this browser.";
+      status.textContent="Your blessing has been posted.";
+      try{renderBlessings(await requestBlessings())}
+      catch(error){status.textContent="Your blessing was posted. Refresh to see it in the guestbook."}
     }catch(error){status.textContent="Could not post your blessing. Check both fields and try again."}
     finally{button.disabled=false}
   });
