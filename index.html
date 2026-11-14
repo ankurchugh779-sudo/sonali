@@ -184,6 +184,7 @@ svg{display:block}
   .closing .foot{max-width:25ch;margin-inline:auto;font-size:clamp(1.25rem,5.7vw,1.5rem);line-height:1.35;text-wrap:balance}
   .closing .foot small{margin-top:17px;font-size:.72rem;line-height:1.5;letter-spacing:.11em;text-wrap:balance}
 }
+@media(max-width:600px){#danceSong{font-size:16px}#songResults{max-height:210px;overflow-y:auto}#songResults button{min-height:44px;text-align:left;overflow-wrap:anywhere}}
 </style>
 </head>
 <body>
@@ -280,7 +281,7 @@ svg{display:block}
           <form id="blessingForm">
             <label class="fld"><span>Your name</span><input name="name" autocomplete="name" maxlength="60" required></label>
             <label class="fld"><span>Your blessing</span><textarea name="message" rows="3" maxlength="500" required></textarea></label>
-            <label class="fld"><span>Which song will you dance to?</span><input name="song" id="danceSong" maxlength="180" autocomplete="off" placeholder="Try Kala Chashma or type your own song"></label>
+            <label class="fld"><span>Which song will you dance to?</span><input name="song" id="danceSong" autocorrect="off" autocapitalize="none" spellcheck="false" aria-controls="songResults" maxlength="180" autocomplete="off" placeholder="Try Kala Chashma or type your own song"></label>
             <ul id="songResults"></ul>
             <p id="songStatus" role="status"></p>
             <button class="btn main" type="submit">Post blessing</button>
@@ -349,7 +350,9 @@ var CFG={
   var form=$("blessingForm"), status=$("blessingStatus"), list=$("blessings");
   var song=$("danceSong"), songs=$("songResults"), songStatus=$("songStatus"), songTimer, songVersion=0;
   var dancePicks=["Kala Chashma","London Thumakda","Gallan Goodiyaan","Nachde Ne Saare","Badtameez Dil","Morni Banke","Aankh Marey","Kar Gayi Chull","Sauda Khara Khara","Tareefan","The Punjaabban Song","What Jhumka?","Desi Girl","Jhoome Jo Pathaan","Chaleya","Aaj Ki Raat","Tauba Tauba","Bijlee Bijlee","Lehanga","Lamberghini","Mundian To Bach Ke","Naach Meri Rani","Dil Chori","Sweety Tera Drama"];
-  song.addEventListener("input",function(){
+  song.addEventListener("input",updateSongSuggestions);
+  song.addEventListener("compositionend",updateSongSuggestions);
+  function updateSongSuggestions(){
     clearTimeout(songTimer);
     var query=song.value.trim(), version=++songVersion;
     songs.replaceChildren();
@@ -357,17 +360,18 @@ var CFG={
     if(query.length<2)return;
     var matches=dancePicks.filter(function(title){return title.toLowerCase().includes(query.toLowerCase())});
     showSongResults(matches);
+    if(!matches.length)songStatus.textContent="Searching songs…";
     songTimer=setTimeout(async function(){
       try{
         var results=await searchMusic(query,version);
         if(version!==songVersion)return;
         showSongResults([...new Set(matches.concat(results))]);
-        if(!matches.length&&!results.length)songStatus.textContent="No matches. You can keep your typed song.";
+        songStatus.textContent=matches.length||results.length?"":"No matches. You can keep your typed song.";
       }catch(error){
         if(version===songVersion&&!matches.length)songStatus.textContent="You can type your pick.";
       }
-    },450);
-  });
+    },550);
+  }
   function searchMusic(query,version){
     return new Promise(function(resolve,reject){
       var callback="rokaMusic"+version, script=document.createElement("script");
