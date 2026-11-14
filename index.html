@@ -381,7 +381,7 @@ var CFG={
         try{results=await searchMusic(query,version)}
         catch(error){
           if(version!==songVersion)return;
-          results=await searchMusic(query,version);
+          results=await searchRecordings(query);
         }
         if(version!==songVersion)return;
         showSongResults([...new Set(matches.concat(results))]);
@@ -391,10 +391,25 @@ var CFG={
       }
     },immediate===true?0:550);
   }
+  async function searchRecordings(query){
+    var url=new URL("https://musicbrainz.org/ws/2/recording/");
+    url.search=new URLSearchParams({query:query,fmt:"json",limit:"25"});
+    var controller=new AbortController();
+    var timer=setTimeout(function(){controller.abort()},6000);
+    try{
+      var response=await fetch(url,{signal:controller.signal,credentials:"omit"});
+      if(!response.ok)throw Error("Search unavailable");
+      var data=await response.json();
+      return (data.recordings||[]).filter(function(track){return track.title}).map(function(track){
+        var artist=(track["artist-credit"]||[]).map(function(credit){return credit.name+(credit.joinphrase||"")}).join("");
+        return (track.title+(artist?" · "+artist:"")).slice(0,180);
+      });
+    }finally{clearTimeout(timer)}
+  }
   function searchMusic(query,version){
     return new Promise(function(resolve,reject){
       var callback="rokaMusic"+version, script=document.createElement("script");
-      var timeout=setTimeout(function(){finish(null)},6500);
+      var timeout=setTimeout(function(){finish(null)},3000);
       function finish(results){
         clearTimeout(timeout);
         script.remove();
